@@ -40,13 +40,13 @@ class MyApp extends StatelessWidget {
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
       // home: const CameraScreen(),
+      home: const MyHomePage(title: 'SkyScripting'),
       title: "SkyScripting",
       initialBinding: GlobalBindings(),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color.fromARGB(255, 182, 48, 162)),
         useMaterial3: true,
-      ),
-      home: const MyHomePage(title: 'SkyScripting'),
+      )
     );
   }
 }

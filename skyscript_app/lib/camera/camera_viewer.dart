@@ -4,7 +4,7 @@ import 'package:get/get.dart';
 import 'package:skyscriptingapp/camera/scan_controller.dart';
 import 'dart:math' as math;
 
-class CameraViewer extends StatelessWidget{
+class CameraViewer extends StatelessWidget {
   const CameraViewer({super.key});
 
   @override
@@ -13,6 +13,7 @@ class CameraViewer extends StatelessWidget{
 
     return GetX<ScanController>(builder: (controller) {
       if (!controller.isInitialized) {
+        debugPrint("\nNOT INITIALIZED YET\n");
         return Container();
       }
       return SizedBox(
@@ -22,10 +23,10 @@ class CameraViewer extends StatelessWidget{
           fit: BoxFit.cover,
           child: SizedBox(
             width: 100,
-            child: Transform (
+            child: Transform(
               alignment: Alignment.center,
               transform: Matrix4.rotationY(math.pi),
-              child:CameraPreview(controller.cameraController),
+              child: CameraPreview(controller.cameraController),
             ),
           ),
         ),

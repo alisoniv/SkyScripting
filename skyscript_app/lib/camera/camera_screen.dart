@@ -7,9 +7,9 @@ class CameraScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
+    return const Stack(
       alignment: Alignment.center,
-      children: const [
+      children: [
         CameraViewer(),
       ],
     );
