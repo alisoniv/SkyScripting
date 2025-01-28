@@ -6,30 +6,15 @@ import 'package:flutter/material.dart';
 import 'pages/home_page.dart';
 import 'pages/camera_page.dart';
 import 'pages/files_page.dart';
-import 'pages/drawing_page.dart';
+import 'pages/code_page.dart';
 
 //Camera Related
-import 'package:skyscriptingapp/camera/scan_controller.dart';
-// import 'package:get/instance_manager.dart';
 import 'package:get/get.dart';
-import 'package:skyscriptingapp/camera/camera_screen.dart';
-
-
-
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const MyApp());
 }
-
-//Refactored from global_bindings.dart
-class GlobalBindings extends Bindings{
-  @override
-  void dependencies() {
-    Get.lazyPut<ScanController>(() => ScanController());
-  }
-}
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -39,14 +24,12 @@ class MyApp extends StatelessWidget {
     //Uses GetX version of Material App for Camera
     return GetMaterialApp(
       debugShowCheckedModeBanner: false,
-      // home: const CameraScreen(),
-      home: const MyHomePage(title: 'SkyScripting'),
       title: "SkyScripting",
-      initialBinding: GlobalBindings(),
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: const Color.fromARGB(255, 182, 48, 162)),
         useMaterial3: true,
-      )
+      ),
+      home: const MyHomePage(title: 'SkyScripting'),
     );
   }
 }
@@ -61,7 +44,6 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
-  // late CameraController controller; //not supposed to be late, but temp fix
 
   @override
   void initState() {
@@ -69,16 +51,15 @@ class _MyHomePageState extends State<MyHomePage> {
   }
   
   final List<Widget> _widgetOptions = <Widget>[    
-    HomePage(),
-    CameraScreen(),
-    FilesPage(),
-    DrawingPage()
+    const HomePage(),
+    const CameraPage(),
+    const FilesPage(),
+    CodePage()
   ];
 
   void _onItemTapped(int index) {
     setState(() {
       _selectedIndex = index;
-      // print("Selected index: $_selectedIndex");
     });
   }
 
@@ -99,7 +80,7 @@ class _MyHomePageState extends State<MyHomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.camera), label: 'Camera'),
           BottomNavigationBarItem(icon: Icon(Icons.file_open), label: 'Files'),
-          BottomNavigationBarItem(icon: Icon(Icons.draw_outlined), label: 'Drawing')
+          BottomNavigationBarItem(icon: Icon(Icons.code), label: 'Python')
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.purple,

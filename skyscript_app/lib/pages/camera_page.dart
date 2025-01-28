@@ -1,15 +1,69 @@
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
+import 'dart:math' as math;
 
-class CameraPage extends StatelessWidget {
+late List<CameraDescription> _cameras;
+
+class CameraPage extends StatefulWidget {
+  const CameraPage({super.key});
+  @override
+  // ignore: library_private_types_in_public_api
+  _CameraPageState createState() => _CameraPageState();
+}
+
+class _CameraPageState extends State<CameraPage> {
+  late CameraController _controller;
+  bool _isCameraInitialized = false;
+
+  @override
+  void initState() {
+    initCamera();
+    super.initState();
+  }
+
+  Future<void> initCamera() async {
+    _cameras = await availableCameras();
+    _controller = CameraController(_cameras[0], ResolutionPreset.low);
+    try {
+      await _controller.initialize();
+      if (!mounted) return;
+      setState(() {
+        _isCameraInitialized = true;
+      });
+    } catch (e) {
+      debugPrint('Error initializing camera: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Camera Page'),
-      ),
-      body: const Center(
-        child: Text('Welcome to the Camera Page'),
-      ),
-    );
+    final size = MediaQuery.of(context).size;
+    if (!_isCameraInitialized) { //Show loading circle while camera inactive
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()), 
+      );
+    } else { //Show Camera Feed
+      return SizedBox(
+        height: size.height,
+        width: size.width,
+        child: FittedBox(
+          fit: BoxFit.cover,
+          child: SizedBox(
+            width: 100,
+            child: Transform(
+              alignment: Alignment.center,
+              transform: Matrix4.rotationY(math.pi),
+              child: CameraPreview(_controller),
+            ),
+          ),
+        ),
+      );
+    }
   }
 }

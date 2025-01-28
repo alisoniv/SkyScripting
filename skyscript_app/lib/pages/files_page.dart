@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 
 class FilesPage extends StatelessWidget {
+  const FilesPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
