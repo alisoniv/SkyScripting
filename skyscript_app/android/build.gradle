@@ -1,3 +1,15 @@
+//buildscript{
+//    ext.kotlin_version = '1.5.31'
+//    ext.gradle_version = '7.3'
+//    repositories{
+//        google()
+//        jcenter()
+//    }
+//    dependencies{
+//        classpath "com.android.tools.build:gradle:$gradle_version"
+//        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+//    }
+//}
 allprojects {
     repositories {
         google()
@@ -16,3 +28,4 @@ subprojects {
 tasks.register("clean", Delete) {
     delete rootProject.buildDir
 }
+

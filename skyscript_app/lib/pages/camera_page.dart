@@ -21,9 +21,9 @@ class _CameraPageState extends State<CameraPage> {
     super.initState();
   }
 
-  Future<void> initCamera() async {
-    _cameras = await availableCameras();
-    _controller = CameraController(_cameras[0], ResolutionPreset.low);
+  Future<void> initCamera() async { //Initialize Camera (Async func so loading screen can provide feedback to user)
+    _cameras = await availableCameras(); //await forces function to wait before continuing (semi-synchronous)
+    _controller = CameraController(_cameras[0], ResolutionPreset.low); //Choose camera and set resolution cam[0] for emulator cam[1] for device
     try {
       await _controller.initialize();
       if (!mounted) return;
