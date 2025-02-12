@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import '/utils/frame_channel.dart';
+import 'package:flutter/services.dart'; // For MethodChannel
+
 
 
 class CameraOpenCVPage extends StatefulWidget {
@@ -14,6 +16,8 @@ class _CameraOpenCVPageState extends State<CameraOpenCVPage> {
   late List<CameraDescription> _cameras;
   late CameraDescription _camera;
 
+  Uint8List? _processedFrame;
+
   @override
   void initState() {
     super.initState();
@@ -25,16 +29,18 @@ class _CameraOpenCVPageState extends State<CameraOpenCVPage> {
 
     _controller = CameraController(
       _camera,
-      ResolutionPreset.high,
+      ResolutionPreset.low,
       enableAudio: false,
     );
     await _controller!.initialize();
 
     // Start the image stream
-    _controller!.startImageStream((CameraImage image) {
-      onCameraFrame(image);
+    _controller!.startImageStream((CameraImage image) async {
+      final processedFrame = await onCameraFrame(image);
+      if (processedFrame != null){
+        setState(() {_processedFrame = processedFrame;});
+      }
     });
-
     setState(() {});
   }
 
@@ -54,7 +60,9 @@ class _CameraOpenCVPageState extends State<CameraOpenCVPage> {
       appBar: AppBar(
         title: Text('Camera Feed with OpenCV Processing'),
       ),
-      body: CameraPreview(_controller!), // Display the camera feed
+      body: _processedFrame != null
+          ? Image.memory(_processedFrame!) // Display the processed frame
+          : CameraPreview(_controller!),
     );
   }
 }
