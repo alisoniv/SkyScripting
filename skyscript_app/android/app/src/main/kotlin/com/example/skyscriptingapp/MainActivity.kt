@@ -1,40 +1,24 @@
 //package com.example.skyscriptingapp
 package com.example.skyscriptingapp
 
-import io.flutter.embedding.android.FlutterActivity
-import io.flutter.embedding.engine.FlutterEngine
-
+import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
-//import com.example.skyscriptingapp.R
-
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.util.Base64
-import java.nio.ByteBuffer
-import java.io.ByteArrayOutputStream
-
-//import androidx.appcompat.app.AppCompatActivity
+import androidx.annotation.NonNull
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
-
 import org.opencv.android.OpenCVLoader
+import org.opencv.android.Utils
+import org.opencv.core.Core
 import org.opencv.core.CvType
 import org.opencv.core.Mat
+import org.opencv.core.Scalar
 import org.opencv.core.Size
+import org.opencv.core.MatOfPoint
 import org.opencv.imgproc.Imgproc
-import org.opencv.core.Core
-import org.opencv.android.Utils
 
-import android.content.Context
-import android.content.ContextWrapper
-import android.content.Intent
-import android.content.IntentFilter
-import android.os.BatteryManager
-import android.os.Build.VERSION
-import android.os.Build.VERSION_CODES
-
-import androidx.annotation.NonNull
-
+import java.io.ByteArrayOutputStream
 
 
 class MainActivity : FlutterActivity() {
@@ -79,9 +63,9 @@ class MainActivity : FlutterActivity() {
                 }
 
                 if (yPlane != null && uPlane != null && vPlane != null) {
-                    val rgbMat = convertYUVtoRGB(yPlane, uPlane, vPlane, imageWidth, imageHeight, rowStride, pixelStride)
-                    val dotCoords = detectFingertip(rgbMat)
-                    result.success(dotCoords)
+                    var hsvMat = convertYUVtoHSV(yPlane, uPlane, vPlane, imageWidth, imageHeight, rowStride, pixelStride)
+                    val (frameBytes, cx, cy) = detectFingertip(hsvMat)
+                    result.success(mapOf("frameBytes" to frameBytes, "cx" to cx, "cy" to cy))
                 }else{
                     result.error("INVALID_ARGUMENT", "Frame data is incorrect", null)
                 }
@@ -90,7 +74,7 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
-    fun convertYUVtoRGB(yPlane: ByteArray, uPlane: ByteArray, vPlane: ByteArray, imageWidth: Int, imageHeight: Int, rowStride: Int, pixelStride: Int): Mat {
+    fun convertYUVtoHSV(yPlane: ByteArray, uPlane: ByteArray, vPlane: ByteArray, imageWidth: Int, imageHeight: Int, rowStride: Int, pixelStride: Int): Mat {
         // Copy Y-plane data directly
         val yuvMat = Mat(imageHeight + imageHeight / 2, imageWidth, CvType.CV_8UC1)
         yuvMat.put(0, 0, yPlane ?: byteArrayOf())
@@ -106,32 +90,72 @@ class MainActivity : FlutterActivity() {
         // Copy interleaved UV data at the right position
         yuvMat.put(imageHeight, 0, uvMat)
 
-        // Step 3: Convert YUV to RGB using OpenCV
-        val rgbMat = Mat()
-        Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2BGR_NV21)
-//        Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2RGB_I420)
-//        Imgproc.cvtColor(yuvMat, rgbMat, Imgproc.COLOR_YUV2RGB_NV21) // NV21 is closest to YUV_420_888
-        return rgbMat
+        // Step 3: Convert YUV to HSV using OpenCV
+//        val hsvMat = Mat()
+        Imgproc.cvtColor(yuvMat, yuvMat, Imgproc.COLOR_YUV2BGR_NV21)
+        Imgproc.cvtColor(yuvMat, yuvMat, Imgproc.COLOR_BGR2HSV)
+        return yuvMat
     }
 
-    private fun detectFingertip(rgbMat: Mat): ByteArray {
+    private fun detectFingertip(hsvMat: Mat): Triple<ByteArray, Double, Double> {
+        // Witchcraft that does the cool stuff. I can't be bothered understanding it
+        val kernel = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, Size(5.0, 5.0))
+        val contours = ArrayList<MatOfPoint>()
+        val areaThreshold = 20;
 
-        // Convert to grayscale
-//        val grayMat = Mat()
-//        Imgproc.cvtColor(mat, grayMat, Imgproc.COLOR_RGB2GRAY)
-//        println("GrayMat dimensions: rows = ${grayMat.rows()}, cols = ${grayMat.cols()}, type = ${grayMat.type()}")
+        var cx = -1.0;
+        var cy = -1.0;
+
+//        val lowerOrange = Scalar(0.0, 0.0, 0.0)
+        //Adjusted Hue because usual range detected blue instead for some reason
+        val lowerOrange = Scalar(90.0, 130.0, 210.0);  // Lower V to detect darker shades
+        val upperOrange = Scalar(120.0, 240.0, 255.0);  // Increase hue range
+
+//        val lowerOrange = Scalar(0.0, 130.0, 210.0);  // Lower V to detect darker shades
+//        val upperOrange = Scalar(25.0, 240.0, 255.0);  // Increase hue range
+
+        var mask = Mat()
+        Core.inRange(hsvMat, lowerOrange, upperOrange, mask)
+        Core.rotate(mask, mask, Core.ROTATE_90_CLOCKWISE)
+        Core.flip(mask, mask, 1)
+
+        Imgproc.morphologyEx(mask, mask, Imgproc.MORPH_OPEN, kernel)
+        Imgproc.morphologyEx(mask, mask, Imgproc.MORPH_CLOSE, kernel)
+        Imgproc.findContours(mask, contours, Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+//        val width = mask.cols()
+//        val height = mask.rows()
+
+        if (!contours.isEmpty()) {
+            //Find Largest Contour
+            val largestContour = contours.maxByOrNull { Imgproc.contourArea(it) }
+            val maxArea = Imgproc.contourArea(largestContour)
+
+//            val (largestContour, maxArea) = contours.fold<Pair<MatOfPoint?, Double>>(null to 0.0) { acc, contour ->
+//                val area = Imgproc.contourArea(contour)
+//                if (area > acc.second) contour to area else acc
+//            }
+
+            //Locate Orange Area Centroid
+            if (maxArea > areaThreshold) {
+                val m = Imgproc.moments(largestContour)
+                if (m.m00 != 0.0) {
+//                    cx = (m.m10 / m.m00).toInt()
+//                    cy = (m.m01 / m.m00).toInt()
+                    cx = (m.m10 / m.m00)
+                    cy = (m.m01 / m.m00)
+                }
+            }
+        }
 
         // Convert Mat back to Bitmap
-        Core.rotate(rgbMat, rgbMat, Core.ROTATE_90_CLOCKWISE)
-        val bitmap = Bitmap.createBitmap(rgbMat.cols(), rgbMat.rows(), Bitmap.Config.ARGB_8888)
-        Utils.matToBitmap(rgbMat, bitmap)
-//        Utils.matToBitmap(grayMat, bitmap)
+        val bitmap = Bitmap.createBitmap(mask.cols(), mask.rows(), Bitmap.Config.ARGB_8888)
+//        val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(mask, bitmap)
 
         val stream = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)
-        val byteArray = stream.toByteArray()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, 100, stream)
 
-        println("ByteArray length: ${byteArray.size}")
-        return byteArray
+        return Triple(stream.toByteArray(), cx, cy)
     }
 }
