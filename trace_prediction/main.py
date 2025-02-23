@@ -1,21 +1,32 @@
 import cv2
 import numpy as np
 import time
-from cnn_base import CNNBaseModel, preprocess_image, CLASS_MAP
 from bounding_box import BoundingBox
-import torch
+from predictor import Predictor
 
 class FingerTracker:
     def __init__(self):
         self.video_capture = cv2.VideoCapture()
-        self.lower_orange = np.array([0, 130, 210])  
-        self.upper_orange = np.array([25, 240, 255]) 
-        self.kernel = np.ones((5, 5), np.uint8)
+        self.predictor = Predictor()
         self.trace_points = []
+
+        self.lower_orange = np.array([0, 130, 210])  
+        self.upper_orange = np.array([20, 240, 255]) 
+
+        self.kernel = np.ones((5, 5), np.uint8)
         
-        self.model = CNNBaseModel()
-        state_dict = torch.load('ocr_letters.pth', map_location='cpu', weights_only=True)
-        self.model.load_state_dict(state_dict)  
+        self.padding = 40
+        self.dot_radius = 10
+        
+        self.gaussian_kernel_size = (self.dot_radius * 3 + 1, self.dot_radius * 3 + 1)
+        self.threshold = 127
+
+        self.letters = []
+        self.letter_height = 64
+        self.current_letter_position = [0, self.letter_height]
+        self.letter_position_stack = [self.current_letter_position]
+
+        self.last_command = None
         
     def start_video_capture(self):
         self.video_capture.open(0)
@@ -30,15 +41,30 @@ class FingerTracker:
         self.canvas = np.zeros((self.frame_height, self.frame_width, 3), np.uint8)
         self.drawing_layer = np.zeros((self.frame_height, self.frame_width, 3), np.uint8)
         self.button_layer = np.zeros((self.frame_height, self.frame_width, 3), np.uint8)
+        self.message = np.zeros((self.frame_height, self.frame_width, 3), dtype=np.uint8)
 
-        self.box = BoundingBox(self.frame_height, self.frame_width)
-        print('Height: ' + str(self.frame_height) + ', Width: ' + str(self.frame_width))
+        self.box = BoundingBox(self.frame_height, self.frame_width, self.padding)
 
-        self.bar_height = self.frame_height - int(self.frame_height / 10)
-        self.midpoint_x = int(self.frame_width / 2)
+        self.bar_height = self.frame_height - int(self.frame_height / 6)
+        self.first_button_edge_x = int(self.frame_width / 4)
+        self.second_button_edge_x = int(self.frame_width / 2)
+        self.third_button_edge_x = int(self.frame_width / 4 * 3)
+        
+        cv2.rectangle(self.button_layer, (0, self.bar_height), (self.first_button_edge_x, self.frame_height), (255, 0, 0), -1) # backspace
+        cv2.rectangle(self.button_layer, (self.first_button_edge_x, self.bar_height), (self.second_button_edge_x, self.frame_height), (0, 0, 255), -1) # clear
+        cv2.rectangle(self.button_layer, (self.second_button_edge_x, self.bar_height), (self.third_button_edge_x, self.frame_height), (0, 255, 0), -1) # accept
+        cv2.rectangle(self.button_layer, (self.third_button_edge_x, self.bar_height), (self.frame_width, self.frame_height), (255, 255, 255), -1) # space
 
-        cv2.rectangle(self.button_layer, (0, self.bar_height), (self.midpoint_x, self.frame_height), (0, 255, 0), -1)
-        cv2.rectangle(self.button_layer, (self.midpoint_x, self.bar_height), (self.frame_width, self.frame_height), (0, 0, 255), -1)
+        font = cv2.FONT_HERSHEY_COMPLEX_SMALL
+        font_scale = 1
+        color = (255, 255, 255)
+        thickness = 2
+
+        text_height = self.bar_height + (self.frame_height - self.bar_height) // 2
+        cv2.putText(self.button_layer, 'backspace', (self.first_button_edge_x // 8, text_height), font, font_scale, color, thickness)
+        cv2.putText(self.button_layer, 'clear', (self.first_button_edge_x + self.first_button_edge_x // 3, text_height), font, font_scale, color, thickness)
+        cv2.putText(self.button_layer, 'accept', (self.second_button_edge_x + self.first_button_edge_x // 4, text_height), font, font_scale, color, thickness)
+        cv2.putText(self.button_layer, 'space', (self.third_button_edge_x + self.first_button_edge_x // 4, text_height), font, font_scale, (0, 0, 0), thickness)
 
     def read_frame(self):
         _, self.frame = self.video_capture.read()
@@ -71,24 +97,105 @@ class FingerTracker:
         return dot[1] < self.bar_height
 
     def add_to_drawing(self, dot):
-        cv2.circle(self.drawing_layer, dot, 8, (255, 255, 255), -1)
-        cv2.circle(self.canvas, dot, 8, (255, 255, 255), -1)
-        cv2.putText(self.frame, f"Orange Dot: ({dot[0]}, {dot[1]})", (dot[0] + 10, dot[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+        cv2.circle(self.drawing_layer, dot, self.dot_radius, (255, 255, 255), -1)
+        cv2.circle(self.canvas, dot, self.dot_radius, (255, 255, 255), -1)
         self.trace_points.append(dot)
         self.box.add_point(dot)
 
     def save_drawing(self):
         cv2.imwrite('letter.png', self.canvas)
-        print('Top: ' + str(self.box.top) + ', Bottom: ' + str(self.box.bottom) + ', Left: ' + str(self.box.left) + ', Right: ' + str(self.box.right))
-        cropped_letter = self.canvas[self.box.get_top_bound():self.box.get_bottom_bound(), self.box.get_left_bound():self.box.get_right_bound()]
-        cv2.imwrite('cropped_letter.png', cropped_letter)
+
+        top = self.box.top - self.dot_radius if self.box.top >= self.dot_radius else self.box.top
+        bottom = self.box.bottom + self.dot_radius + 1 if (self.frame_height - self.box.bottom) >= self.dot_radius else self.box.bottom
+        left = self.box.left - self.dot_radius if self.box.left >= self.dot_radius else self.box.left
+        right = self.box.right + self.dot_radius + 1 if (self.frame_width - self.box.right) >= self.dot_radius else self.box.right
+
+        # isolated_letter = self.canvas[self.box.top:self.box.bottom+1, self.box.left:self.box.right+1]
+        isolated_letter = self.canvas[top:bottom, left:right]
+        padded_letter = cv2.copyMakeBorder(isolated_letter, self.padding, self.padding, self.padding, self.padding, cv2.BORDER_CONSTANT, value=0)
+        cv2.imwrite('padded_letter.png', padded_letter)
+        
+        blurred_letter = cv2.GaussianBlur(padded_letter, self.gaussian_kernel_size, 0)
+        cv2.imwrite('blurred_letter.png', blurred_letter)
+
+        _, thresholded_letter = cv2.threshold(blurred_letter, self.threshold, 255, cv2.THRESH_BINARY)
+        cv2.imwrite('thresholded_letter.png', thresholded_letter)
+
+    def add_to_message(self, character):
+        self.letters.append(character)
+
+        with open('message.txt', 'a') as file:
+            file.write(character)
+    
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 3
+        color = (255, 255, 255)
+        thickness = 4
+
+        # Get text size
+        text_width, text_height = cv2.getTextSize(character, font, font_scale, thickness)[0]
+
+        cv2.putText(self.message, character, self.current_letter_position, font, font_scale, color, thickness)
+        self.letter_position_stack.append(self.current_letter_position.copy())
+
+        self.current_letter_position[0] += text_width
+
+        if (self.current_letter_position[0] + text_width) > self.frame_width:
+            self.current_letter_position[0] = 0
+            self.current_letter_position[1] += self.letter_height + 5
+
+    def predict_letter_trace(self):
+        return self.predictor.predict_letter()
+
+    def backspace(self):
+        last_letter = self.letters.pop()
+
+        with open("message.txt", "rb+") as file:
+            file.seek(0, 2)  
+            size = file.tell()  
+            if size > 0:
+                file.truncate(size - 1) 
+
+        self.current_letter_position = self.letter_position_stack.pop()
+
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 3
+        color = (0, 0, 0)
+        thickness = 4
+            
+        cv2.putText(self.message, last_letter, self.current_letter_position, font, font_scale, color, thickness)
 
     def execute_command(self, dot):
-        if dot[0] < self.midpoint_x and len(self.trace_points) != 0:
-            self.save_drawing()
-            self.predict_letter()
-        
-        self.clear_drawing()
+        x = dot[0]
+
+        if x < self.first_button_edge_x:
+            if len(self.letters) > 0 and self.last_command != 'BACKSPACE':
+                self.backspace()
+
+            self.last_command = 'BACKSPACE'
+            
+        elif x < self.second_button_edge_x:
+            if self.has_drawing():
+                self.clear_drawing()
+            self.last_command = 'CLEAR'
+        elif x < self.third_button_edge_x:
+            if self.has_drawing():
+                self.save_drawing()
+                letter = self.predict_letter_trace()
+                self.add_to_message(letter)
+                self.clear_drawing()
+            
+            self.last_command = 'SAVE'
+        else:
+            if self.last_command != 'SPACE':
+                self.add_to_message(' ')
+                with open('message.txt', 'a') as file:
+                    file.write(' ')
+            
+            self.last_command = 'SPACE'
+
+    def has_drawing(self):
+        return len(self.trace_points) != 0
 
     def clear_drawing(self):
         self.canvas = np.zeros((self.frame_height, self.frame_width, 3), np.uint8)
@@ -103,31 +210,23 @@ class FingerTracker:
         cv2.addWeighted(self.frame, 1.0, self.drawing_layer, 1.0, 0, self.frame)
         cv2.addWeighted(self.frame, 1.0, self.button_layer, 1.0, 0, self.frame)
         cv2.imshow("Live Camera", self.frame)
+        cv2.imshow("Message", self.message)
         cv2.imshow("Mask", self.mask)
 
-    def predict_letter(self):
-        self.model.eval()
-
-        image_tensor = preprocess_image()
-        image_tensor = image_tensor * 2 - 1
-        
-        with torch.no_grad():
-            # print(image_tensor)
-            output = self.model(image_tensor)
-            _, predicted_class = torch.max(output, 1)
-            print('Predicted_class: ' + CLASS_MAP[str(predicted_class.item() - 1)])
-
     def run(self):
+        print('Running program . . .')
         self.start_video_capture()
         self.initialize_screen()
         
         start = time.time()
+        processed = False
 
         while True:
             self.read_frame()
             self.apply_mask()
 
             dot = self.find_dot_location()
+            # print(f"dot: {dot}")
             if self.dot_is_detected(dot):
                 if self.is_draw_action(dot):
                     self.add_to_drawing(dot)
@@ -135,16 +234,25 @@ class FingerTracker:
                     self.execute_command(dot)
 
                 start = time.time()
+                processed = False
             else:
+                self.last_command = None
+
+                if not processed:
+                    self.drawing_layer = cv2.GaussianBlur(self.drawing_layer, self.gaussian_kernel_size, 0)
+                    _, self.drawing_layer = cv2.threshold(self.drawing_layer, self.threshold, 255, cv2.THRESH_BINARY)
+                    processed = True
+
                 if not self.is_drawing_blank():
                     if (time.time() - start) >= 5.0:
                         self.save_drawing()
-                        self.predict_letter()
+                        letter = self.predict_letter_trace()
+                        self.add_to_message(letter)
                         self.clear_drawing()
 
             self.display()
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            if cv2.pollKey() & 0xFF == ord('q'):
                 break
 
         self.video_capture.release()
