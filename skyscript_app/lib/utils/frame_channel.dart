@@ -2,6 +2,7 @@ import 'package:flutter/services.dart'; // For MethodChannel
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 
+// Used for Old Method-channel finger tracing - Probably remove in final build
 class CameraFrameProcessor {
   static const MethodChannel _frameChannel = MethodChannel('camera_frame_channel');
 

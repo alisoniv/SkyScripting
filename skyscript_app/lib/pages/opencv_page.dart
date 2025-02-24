@@ -5,8 +5,7 @@ import '/utils/fingertip_overlay.dart';
 import 'package:flutter/services.dart'; // For MethodChannel
 import 'dart:math' as math;
 
-
-
+// Old Method of Finger Tracing with MethodChannel - Probably Remove in Final Build
 
 class CameraOpenCVPage extends StatefulWidget {
   @override

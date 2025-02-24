@@ -5,16 +5,27 @@ import 'package:flutter/material.dart';
 // Pages
 import 'pages/home_page.dart';
 import 'pages/camera_page.dart';
-import 'pages/files_page.dart';
+// import 'pages/files_page.dart';
 import 'pages/code_page.dart';
 import 'pages/opencv_page.dart';
+import 'pages/debug_page.dart';
 
 //Camera Related
 import 'package:get/get.dart';
 
+// Import to include Cross-Page Updater
+import '/utils/fingertip_overlay.dart';
+import 'package:provider/provider.dart';
+
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => ImageProviderNotifier(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -30,7 +41,7 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color.fromARGB(255, 182, 48, 162)),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'SkyScripting'),
+      home: const MyHomePage(title: 'SkyScript'),
     );
   }
 }
@@ -54,7 +65,7 @@ class _MyHomePageState extends State<MyHomePage> {
   final List<Widget> _widgetOptions = <Widget>[    
     const HomePage(),
     const CameraPage(),
-    const FilesPage(),
+    DebugPage(),
     CodePage(),
     CameraOpenCVPage()
   ];
@@ -67,7 +78,8 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
-
+    final size = MediaQuery.of(context).size;
+    final iconSize = size.width * 0.05;
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Theme.of(context).colorScheme.inversePrimary,
@@ -78,16 +90,20 @@ class _MyHomePageState extends State<MyHomePage> {
         child: _widgetOptions.elementAt(_selectedIndex),
       ),
       bottomNavigationBar: BottomNavigationBar(
-        items: const<BottomNavigationBarItem>[
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.camera), label: 'Camera'),
-          BottomNavigationBarItem(icon: Icon(Icons.file_open), label: 'Files'),
-          BottomNavigationBarItem(icon: Icon(Icons.code), label: 'Python'),
-          BottomNavigationBarItem(icon: Icon(Icons.double_arrow), label: 'FrameTransfer'),
+        items: <BottomNavigationBarItem>[
+          BottomNavigationBarItem(icon: Icon(Icons.home, size: iconSize), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.camera, size: iconSize), label: 'Camera'),
+          BottomNavigationBarItem(icon: Icon(Icons.file_open, size: iconSize), label: 'Files'),
+          BottomNavigationBarItem(icon: Icon(Icons.code, size: iconSize), label: 'Python'),
+          BottomNavigationBarItem(icon: Icon(Icons.double_arrow, size: iconSize), label: 'FrameTransfer'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.purple,
+        unselectedItemColor: Colors.grey,
         onTap: _onItemTapped,
+        selectedFontSize: size.width * 0.03,
+        unselectedFontSize: size.width * 0.025,
+        showUnselectedLabels: true,
       ),
     );
   }

@@ -15,6 +15,7 @@ import org.opencv.core.CvType
 import org.opencv.core.Mat
 import org.opencv.core.Scalar
 import org.opencv.core.Size
+import org.opencv.core.Point
 import org.opencv.core.MatOfPoint
 import org.opencv.imgproc.Imgproc
 
@@ -39,7 +40,13 @@ class MainActivity : FlutterActivity() {
         super.configureFlutterEngine(flutterEngine)
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler {
             call, result ->
-            if (call.method == "processFrame") {
+            if (call.method == "inferLetter"){
+                val points = call.arguments as List<List<Double>>
+                //CREATE IMAGE FUNCTION
+                val byteArray = generateImage(points);
+                //INFER LETTER FUNCTION
+                result.success(mapOf("top3" to listOf("A", "B", "C"), "byteArray" to byteArray))
+            }else if (call.method == "processFrame") {
                 val frameArgs = call.arguments as? Map<String, Any>
 
                 var yPlane: ByteArray? = null
@@ -74,7 +81,47 @@ class MainActivity : FlutterActivity() {
             }
         }
     }
-    fun convertYUVtoHSV(yPlane: ByteArray, uPlane: ByteArray, vPlane: ByteArray, imageWidth: Int, imageHeight: Int, rowStride: Int, pixelStride: Int): Mat {
+
+    private fun generateImage(points: List<List<Double>>): ByteArray {
+        var maxX = Int.MIN_VALUE
+        var maxY = Int.MIN_VALUE
+        var minX = Int.MAX_VALUE
+        var minY = Int.MAX_VALUE
+        for (point in points){
+            var x = point[0].toInt()
+            var y = point[1].toInt()
+
+            maxX = maxOf(maxX, x)
+            maxY = maxOf(maxY, y)
+            minX = minOf(minX, x)
+            minY = minOf(minY, y)
+        }
+        val width = maxOf(1, maxX - minX)
+        val height = maxOf(1, maxY - minY)
+        Log.d("MyTag", "Width: $width , Height: $height")
+        var xOffset = 0;
+        var yOffset = 0;
+        xOffset = -1 * minX;
+        yOffset = -1 * minY;
+
+        val mat = Mat(height, width, CvType.CV_8UC1, Scalar(0.0))
+        val radius = 10.0
+        val gaussian_kernel = Size(radius * 3 + 1, radius * 3 + 1)
+        for (point in points){
+            Imgproc.circle(mat, Point(point[0] + xOffset, point[1] + yOffset), 10, Scalar(255.0), -1)
+        }
+        Imgproc.GaussianBlur(mat, mat, gaussian_kernel, 0.0)
+        var bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        Utils.matToBitmap(mat, bitmap)
+        bitmap = Bitmap.createScaledBitmap(bitmap, 28, 28, true)
+
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+
+        return outputStream.toByteArray()
+    }
+
+    private fun convertYUVtoHSV(yPlane: ByteArray, uPlane: ByteArray, vPlane: ByteArray, imageWidth: Int, imageHeight: Int, rowStride: Int, pixelStride: Int): Mat {
         // Copy Y-plane data directly
         val yuvMat = Mat(imageHeight + imageHeight / 2, imageWidth, CvType.CV_8UC1)
         yuvMat.put(0, 0, yPlane ?: byteArrayOf())
