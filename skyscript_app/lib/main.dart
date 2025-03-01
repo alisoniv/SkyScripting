@@ -8,13 +8,12 @@ import 'pages/camera_page.dart';
 import 'pages/files_page.dart';
 import 'pages/drawing_page.dart';
 
+
 //Camera Related
 import 'package:skyscriptingapp/camera/scan_controller.dart';
 // import 'package:get/instance_manager.dart';
 import 'package:get/get.dart';
 import 'package:skyscriptingapp/camera/camera_screen.dart';
-
-
 
 
 Future<void> main() async {
@@ -29,7 +28,6 @@ class GlobalBindings extends Bindings{
     Get.lazyPut<ScanController>(() => ScanController());
   }
 }
-
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
@@ -58,15 +56,9 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
-
 class _MyHomePageState extends State<MyHomePage> {
   int _selectedIndex = 0;
-  // late CameraController controller; //not supposed to be late, but temp fix
 
-  @override
-  void initState() {
-    super.initState();
-  }
   
   final List<Widget> _widgetOptions = <Widget>[    
     HomePage(),
@@ -108,3 +100,8 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 }
+
+
+
+
+
