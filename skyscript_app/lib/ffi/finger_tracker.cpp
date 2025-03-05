@@ -11,6 +11,8 @@
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "MyTag", __VA_ARGS__)
 
 std::mutex frameMutex;
+bool sim = false;
+bool debug = false;
 
 extern "C"
 {
@@ -26,27 +28,59 @@ extern "C"
 
         // 1. Converting YUV to BGR Format because:
         // "manipulating frames needed to be more difficult" - Android
+        cv::Mat yuvImg;
 
-        // Copy over the Y plane to Empty MAT-compatible format
-        cv::Mat yuvImg(height + height / 2, width, CV_8UC1);
-        memcpy(yuvImg.data, yPlane, width * height);
-        //LOGD("Y Planes Done");
+        if(sim){
+            // Create a single Mat to hold YUV420 data
+            yuvImg = cv::Mat(height + height / 2, width, CV_8UC1);
 
-        // Combine U and V planes and integrate into MAT image
-        uint8_t *uvPtr = yuvImg.data + width * height;
-        for (int i = 0; i < height / 2; i++) {
-            for (int j = 0; j < width / 2; j++) {
-                int uvIndex = i * (width / 2) + j;
-                int maxIndex = (width * height) / 4;
+            // Copy Y plane directly
+            for (int i = 0; i < height; i++) {
+                memcpy(yuvImg.ptr(i), yPlane + i * rowStride, width);
+            }
+            // Combine U and V planes and integrate into MAT image
 
-                if (uvIndex >= 0 && uvIndex < maxIndex) {
-                    uvPtr[i * width + j * 2] = vPlane[uvIndex];
-                    uvPtr[i * width + j * 2 + 1] = uPlane[uvIndex];
-                } else {
-                    LOGE("Invalid UV index: %d (max: %d)", uvIndex, maxIndex);
+            uint8_t *uvPtr = yuvImg.data + width * height;
+            for (int i = 0; i < height / 2; i++) {
+                for (int j = 0; j < width / 2; j++) {
+                    int uvIndex = i * (width / 2) + j;
+                    int maxIndex = (width * height) / 4;
+
+                    if (uvIndex >= 0 && uvIndex < maxIndex) {
+                        uvPtr[i * width + j * 2] = vPlane[uvIndex];
+                        uvPtr[i * width + j * 2 + 1] = uPlane[uvIndex];
+                    } else {
+                        LOGE("Invalid UV index: %d (max: %d)", uvIndex, maxIndex);
+                    }
+                }
+            }
+        }else {
+            int ySize = width * height;
+            int uvSize = ySize / 2;  // UV data is half of Y
+
+            // Create a Mat of size (height * 1.5, width), single channel (8-bit)
+            yuvImg = cv::Mat(height * 3 / 2, width, CV_8UC1);
+
+            uint8_t *nv21 = yuvImg.data;  // Pointer to Mat data
+
+            // Copy Y plane (luma)
+            for (int i = 0; i < height; i++) {
+                memcpy(nv21 + i * width, yPlane + i * rowStride, width);
+            }
+
+            // Convert U and V planes to interleaved VU (NV21)
+            uint8_t *uvPtr = nv21 + ySize;  // Start of UV section
+
+            for (int i = 0; i < height / 2; i++) {
+                for (int j = 0; j < width / 2; j++) {
+                    int uvIndex = i * rowStride + j * pixelStride;  // Account for pixelStride
+
+                    uvPtr[i * width + j * 2] = vPlane[uvIndex];      // V
+                    uvPtr[i * width + j * 2 + 1] = uPlane[uvIndex];  // U
                 }
             }
         }
+
         //LOGD("UV Planes Done");
         if (yuvImg.empty()) {
             LOGE("YUV frame is empty!");
@@ -54,8 +88,14 @@ extern "C"
 
         // Complete Conversion, so OpenCV works properly
         cv::Mat frame;
-        cv::cvtColor(yuvImg, frame, cv::COLOR_YUV2BGR_NV21);
-//        cv::cvtColor(yuvImg, frame, cv::COLOR_YUV2BGR_I420);
+//        cv::cvtColor(yuvImg, frame, cv::COLOR_YUV2BGR_NV12);
+//        cv::cvtColor(yuvImg, frame, cv::COLOR_YUV2BGR_NV21);
+        if(sim){
+            cv::cvtColor(yuvImg, frame, cv::COLOR_YUV2BGR_NV21);
+        }else{
+            cv::cvtColor(yuvImg, frame, cv::COLOR_YUV2BGR_NV21);
+        }
+
         //LOGD("BGR CONVERTED Image");
 
         if (frame.empty()) {
@@ -73,14 +113,19 @@ extern "C"
         }
 
         // Define Orange Color Range to Isolate
-        cv::Scalar lowerOrange(0, 130, 210);
+//        cv::Scalar lowerOrange(0, 130, 210);
+        cv::Scalar lowerOrange(0, 130, 150);
         cv::Scalar upperOrange(25, 240, 255);
+//
+
 //
 //        // Isolate orange (set to white) from rest of frame (black)
         cv::Mat mask;
         cv::inRange(hsv, lowerOrange, upperOrange, mask);
-        if(isSamsungTablet == 0) {
+        if(sim) {
             cv::rotate(mask, mask, cv::ROTATE_90_CLOCKWISE);
+        }else{
+            if (debug){ cv::flip(mask, mask, 1); } else { cv::rotate(mask, mask, cv::ROTATE_90_COUNTERCLOCKWISE); }
         }
 
         // Remove Noise
@@ -89,7 +134,7 @@ extern "C"
         cv::morphologyEx(mask, mask, cv::MORPH_CLOSE, maskKernel);
 
         std::vector<std::vector<cv::Point>> contours;
-        const int areaThreshold = 20;
+        const int areaThreshold = 30;
         int cx = -100;
         int cy = -100;
         cv::findContours(mask, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);

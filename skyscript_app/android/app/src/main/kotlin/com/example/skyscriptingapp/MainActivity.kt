@@ -19,6 +19,7 @@ import org.opencv.core.Point
 import org.opencv.core.MatOfPoint
 import org.opencv.imgproc.Imgproc
 
+
 import java.io.ByteArrayOutputStream
 
 
@@ -46,37 +47,7 @@ class MainActivity : FlutterActivity() {
                 val byteArray = generateImage(points);
                 //INFER LETTER FUNCTION
                 result.success(mapOf("top3" to listOf("A", "B", "C"), "byteArray" to byteArray))
-            }else if (call.method == "processFrame") {
-                val frameArgs = call.arguments as? Map<String, Any>
-
-                var yPlane: ByteArray? = null
-                var uPlane: ByteArray? = null
-                var vPlane: ByteArray? = null
-                var imageWidth: Int = 0
-                var imageHeight: Int = 0
-                var rowStride: Int = 0
-                var pixelStride: Int = 0
-
-                if (frameArgs != null) {
-                    yPlane = frameArgs["yPlane"] as? ByteArray ?: byteArrayOf()
-                    uPlane = frameArgs["uPlane"] as? ByteArray ?: byteArrayOf()
-                    vPlane = frameArgs["vPlane"] as? ByteArray ?: byteArrayOf()
-                    imageWidth = frameArgs["imageWidth"] as? Int ?: 0
-                    imageHeight = frameArgs["imageHeight"] as? Int ?: 0
-                    rowStride = frameArgs["rowStride"] as? Int ?: 0
-                    pixelStride = frameArgs["pixelStride"] as? Int ?: 0
-                }else{
-                    result.error("NULL_ARGS", "Data from flutter not passed properly", null)
-                }
-
-                if (yPlane != null && uPlane != null && vPlane != null) {
-                    var hsvMat = convertYUVtoHSV(yPlane, uPlane, vPlane, imageWidth, imageHeight, rowStride, pixelStride)
-                    val (frameBytes, cx, cy) = detectFingertip(hsvMat)
-                    result.success(mapOf("frameBytes" to frameBytes, "cx" to cx, "cy" to cy))
-                }else{
-                    result.error("INVALID_ARGUMENT", "Frame data is incorrect", null)
-                }
-            } else {
+            }else {
                 result.notImplemented()
             }
         }
@@ -113,14 +84,47 @@ class MainActivity : FlutterActivity() {
         Imgproc.GaussianBlur(mat, mat, gaussian_kernel, 0.0)
         var bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(mat, bitmap)
-        bitmap = Bitmap.createScaledBitmap(bitmap, 28, 28, true)
+//        bitmap = Bitmap.createScaledBitmap(bitmap, 28, 28, true)
 
         val outputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
 
         return outputStream.toByteArray()
     }
+// If for some reason you want Kotlin side to process frames
+    /*
+            else if (call.method == "processFrame") {
+                val frameArgs = call.arguments as? Map<String, Any>
 
+                var yPlane: ByteArray? = null
+                var uPlane: ByteArray? = null
+                var vPlane: ByteArray? = null
+                var imageWidth: Int = 0
+                var imageHeight: Int = 0
+                var rowStride: Int = 0
+                var pixelStride: Int = 0
+
+                if (frameArgs != null) {
+                    yPlane = frameArgs["yPlane"] as? ByteArray ?: byteArrayOf()
+                    uPlane = frameArgs["uPlane"] as? ByteArray ?: byteArrayOf()
+                    vPlane = frameArgs["vPlane"] as? ByteArray ?: byteArrayOf()
+                    imageWidth = frameArgs["imageWidth"] as? Int ?: 0
+                    imageHeight = frameArgs["imageHeight"] as? Int ?: 0
+                    rowStride = frameArgs["rowStride"] as? Int ?: 0
+                    pixelStride = frameArgs["pixelStride"] as? Int ?: 0
+                }else{
+                    result.error("NULL_ARGS", "Data from flutter not passed properly", null)
+                }
+
+                if (yPlane != null && uPlane != null && vPlane != null) {
+                    var hsvMat = convertYUVtoHSV(yPlane, uPlane, vPlane, imageWidth, imageHeight, rowStride, pixelStride)
+                    val (frameBytes, cx, cy) = detectFingertip(hsvMat)
+                    result.success(mapOf("frameBytes" to frameBytes, "cx" to cx, "cy" to cy))
+                }else{
+                    result.error("INVALID_ARGUMENT", "Frame data is incorrect", null)
+                }
+            } */
+/*
     private fun convertYUVtoHSV(yPlane: ByteArray, uPlane: ByteArray, vPlane: ByteArray, imageWidth: Int, imageHeight: Int, rowStride: Int, pixelStride: Int): Mat {
         // Copy Y-plane data directly
         val yuvMat = Mat(imageHeight + imageHeight / 2, imageWidth, CvType.CV_8UC1)
@@ -205,4 +209,6 @@ class MainActivity : FlutterActivity() {
 
         return Triple(stream.toByteArray(), cx, cy)
     }
+
+ */
 }

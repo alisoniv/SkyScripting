@@ -7,7 +7,7 @@ import 'pages/home_page.dart';
 import 'pages/camera_page.dart';
 // import 'pages/files_page.dart';
 import 'pages/code_page.dart';
-import 'pages/opencv_page.dart';
+// import 'pages/opencv_page.dart';
 import 'pages/debug_page.dart';
 
 //Camera Related
@@ -67,7 +67,7 @@ class _MyHomePageState extends State<MyHomePage> {
     const CameraPage(),
     DebugPage(),
     CodePage(),
-    CameraOpenCVPage()
+    // CameraOpenCVPage()
   ];
 
   void _onItemTapped(int index) {
@@ -94,8 +94,8 @@ class _MyHomePageState extends State<MyHomePage> {
           BottomNavigationBarItem(icon: Icon(Icons.home, size: iconSize), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.camera, size: iconSize), label: 'Camera'),
           BottomNavigationBarItem(icon: Icon(Icons.file_open, size: iconSize), label: 'Files'),
-          BottomNavigationBarItem(icon: Icon(Icons.code, size: iconSize), label: 'Python'),
-          BottomNavigationBarItem(icon: Icon(Icons.double_arrow, size: iconSize), label: 'FrameTransfer'),
+          BottomNavigationBarItem(icon: Icon(Icons.code, size: iconSize), label: 'SkyScript'),
+          // BottomNavigationBarItem(icon: Icon(Icons.double_arrow, size: iconSize), label: 'FrameTransfer'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: Colors.purple,

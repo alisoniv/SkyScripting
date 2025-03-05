@@ -107,6 +107,7 @@ class _CameraOpenCVPageState extends State<CameraOpenCVPage> {
               ),
             ),
           ), //CameraPreview
+          // FingertipOverlay(key: _overlayKey, isTablet: 0),
           FingertipOverlay(key: _overlayKey),
         ]
       )

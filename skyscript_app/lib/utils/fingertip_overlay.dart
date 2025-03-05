@@ -14,6 +14,9 @@ class ImageProviderNotifier extends ChangeNotifier {
 }
 
 class FingertipOverlay extends StatefulWidget {
+  // final int isTablet = 0;
+
+  // const FingertipOverlay({Key? key, required this.isTablet}) : super(key: key);
   const FingertipOverlay({Key? key}) : super(key: key);
 
   @override
@@ -22,6 +25,7 @@ class FingertipOverlay extends StatefulWidget {
 
 class FingertipOverlayState extends State<FingertipOverlay>{
   List<Offset> points = [];
+  List<Offset> calibPoints = [];
 
   // Draw Point on Screen - if Valid
   void addPoint(Offset newPoint) {
@@ -31,11 +35,20 @@ class FingertipOverlayState extends State<FingertipOverlay>{
     });
   }
 
+  // Calibrate positioning of bounding boxes
+  void calibratePoint(Offset newPoint) {
+    if (!mounted || newPoint.isInfinite) return;
+    setState(() {
+      calibPoints.add(newPoint);
+    });
+  }
+
   // Wipe Points from Screen
   void clearPoints(){
     if (!mounted) return;
     setState(() {
       points.clear();
+      calibPoints.clear();
     });
   }
 
@@ -73,7 +86,8 @@ class FingertipOverlayState extends State<FingertipOverlay>{
     // Handles Drawing Overlay for Finger-Tracer
     return GestureDetector(
       child: CustomPaint(
-        painter: FingerPainter(points),
+        // painter: FingerPainter(points, widget.isTablet),
+        painter: FingerPainter(points, calibPoints),
         size: Size.infinite,
       ),
     );
@@ -83,20 +97,38 @@ class FingertipOverlayState extends State<FingertipOverlay>{
 // Interface with Painter Class to Draw Dots over Fingertip
 class FingerPainter extends CustomPainter {
   List<Offset> points = [];
+  List<Offset> calibPoints = [];
+  // final int isTablet;
 
-  FingerPainter(this.points);
+  // FingerPainter(this.points, this.isTablet);
+  FingerPainter(this.points, this.calibPoints);
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Draw circles at each point
     final paint = Paint()
       ..color = Colors.red
       ..strokeWidth = 4.0
       ..strokeCap = StrokeCap.round;
 
-    // Draw circles at each point
+    double radius = 15.0;
     for (var point in points) {
       if (point != Offset.infinite) {
-        canvas.drawCircle(point, 20.0, paint); // Adjust radius as needed
+        canvas.drawCircle(point, radius, paint); // Adjust radius as needed
+      }
+    }
+
+    //Draw Calibration Points
+
+    final calibPaint = Paint()
+      ..color = Colors.blue
+      ..strokeWidth = 4.0
+      ..strokeCap = StrokeCap.round;
+
+
+    for(var calib in calibPoints){
+      if (calib != Offset.infinite) {
+        canvas.drawCircle(calib, radius, calibPaint); // Adjust radius as needed
       }
     }
   }

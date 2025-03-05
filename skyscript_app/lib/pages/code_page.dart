@@ -20,12 +20,16 @@ class _CodePageState extends State<CodePage> {
   int _isSamsungTablet = 0;
   double _deviceWidth = -1.0;
   double _deviceHeight = -1.0;
-  int _widthOffset = 0;
-  int _heightOffset = 0;
+  int _widthOffset = 0; //Set during build func
+  int _heightOffset = 0; //Set during build func
   int frame_counter = 0;
-  String currentText = "UR MOM";
+  String currentText = "HELLO: ";
+  bool sim = false;
+  bool debug = false; //Set to true to calibrate bounding boxes for clear and infer (displays blue dots)
 
   Uint8List? _processedFrame;
+
+
 
   // Communicate with Fingertip Drawing Overlay
   final GlobalKey<FingertipOverlayState> _overlayKey = GlobalKey();
@@ -54,40 +58,54 @@ class _CodePageState extends State<CodePage> {
     }else {
       if(_deviceWidth < 0 || _deviceHeight < 0){return;}
 
+      double xScale = _deviceWidth / 240;
+      double yScale = _deviceHeight / 320;
+      // Display points according to device scale
+      x = x * xScale + _widthOffset;
+      y = y * yScale + _heightOffset;
+
       /*
       Action Decision Making State Machine Thing
       Handles Deletion and Inference So Far
        */
-      if (y > 210){
-        if (x < 66){
+      //Set button boxes
+      double deleteYThresh = 250.0 * yScale + _heightOffset;
+      double deleteXThresh = 110.0 * xScale + _widthOffset;
+      double inferXThresh = 130.0 * xScale + _widthOffset;
+
+      if (y > deleteYThresh){
+        if (x < deleteXThresh){
           deleteCount += 1;
+          if(debug) _overlayKey.currentState?.calibratePoint(Offset(deleteXThresh, deleteYThresh));
           if (deleteCount >= 20){
             _overlayKey.currentState?.clearPoints();
             cooldown=true;
             deleteCount=0;
-            return;
           }
-        }else if(x > 84){
+        }else if(x > inferXThresh){
           inferCount += 1;
+          if(debug) _overlayKey.currentState?.calibratePoint(Offset(inferXThresh, deleteYThresh));
           if (inferCount >= 20){
             List<String> top3 = await _overlayKey.currentState?.inferLetter() ?? ["ERR", "ERR2", "ERR3"];
             cooldown=true;
             inferCount=0;
             currentText += top3[0];
-            return;
           }
         }
+        return;
       }else{
         deleteCount = 0;
         inferCount = 0;
       }
-
-      // Display points according to device scale
-      x = x * (_deviceWidth / 240) + _widthOffset;
-      y = y * (_deviceHeight / 320) + _heightOffset;
-
       // Add Point to Overlay
       _overlayKey.currentState?.addPoint(Offset(x, y));
+
+      // print("X: ${x}");
+      // print("Y: ${y}");
+      // print("w_off: ${_widthOffset}");
+      // print("h_off: ${_heightOffset}");
+
+
     }
   }
 
@@ -99,7 +117,11 @@ class _CodePageState extends State<CodePage> {
 
   Future<void> _initializeCamera() async {
     _cameras = await availableCameras();
-    _camera = _cameras.first; // Select first camera (back/front)
+    if (_cameras.length > 1) {
+      _camera = _cameras[1];
+    }else {
+      _camera = _cameras.first; // Select first camera (back/front)
+    }
 
     // Camera Parameters (Only Tested on Low Resolution so far)
     _controller = CameraController(
@@ -109,6 +131,8 @@ class _CodePageState extends State<CodePage> {
     );
 
     await _controller!.initialize();
+    await _controller!.lockCaptureOrientation();
+
     if(!mounted) return;
     setState(() {
       _isCameraInitialized = true;
@@ -122,8 +146,8 @@ class _CodePageState extends State<CodePage> {
     _controller!.startImageStream((CameraImage image) async {
       frameNum += 1;
 
-      // Processes every second frame (C++ is too fast for flutter)
-      if (frameNum % 2 != 0){return;}
+      // Processes every second frame (C++ is too fast for flutter in simulator)
+      if (frameNum % 2 != 0 && sim){return;}
 
       // Handle processing, ensure one-at-a-time processing
       if (_isProcessing || image == null) return; // Skip frame if processing is ongoing
@@ -136,6 +160,13 @@ class _CodePageState extends State<CodePage> {
   // Call C++ FFI function
   // Receives Image-Post-Process (for debugging) and X,Y coords of orange dot / fingertip
   void processFrame(CameraImage image) {
+    // print("Format: ${image.format.group}");
+    // print("Planes: ${image.planes.length}");
+    // print("rowStride: ${image.planes[0].bytesPerRow}");
+    // print("pixelStride: ${image.planes[1].bytesPerPixel}");
+    // print("Width: ${image.width}");
+    // print("Height: ${image.height}");
+
     if (image.planes.length < 3) {
       debugPrint("Error: CameraImage does not contain all YUV planes!");
       return;
@@ -203,24 +234,30 @@ class _CodePageState extends State<CodePage> {
 
     _deviceWidth = size.width;
     _deviceHeight = size.height;
+    // print("Widths: ${_deviceWidth}");
+    // print("Heights: ${_deviceHeight}");
+
     if (size.width > 600.0){ //For Tablet A9+
       _isSamsungTablet = 1;
-      _widthOffset = 150;
-      _heightOffset = 50;
-    }else{                   //For Phone S23
+      _widthOffset = 0;
+      _heightOffset = -100;
+    }else{                   //EDIT these for Phone S23
       _isSamsungTablet = 0;
-      _heightOffset = -120;
+      _widthOffset = 0;
+      _heightOffset = 0;
     }
 
     if (!_isCameraInitialized) {
       return Center(child: CircularProgressIndicator());
     }
+
     return Scaffold(
         appBar: AppBar(
           title: Text('Camera Feed with OpenCV Processing'),
         ),
         // If debugging uncomment this body and comment out the other body
-        // This body shows the processed frames - can help see if orange is detected properly
+        // This body shows white for detecting orange and black for no detecting orange
+        // See finger_tracker.cpp for more info
         // body: _processedFrame != null
         //     ? Image.memory(_processedFrame!) // Display the processed frame
         //     : CameraPreview(_controller!),
@@ -236,17 +273,15 @@ class _CodePageState extends State<CodePage> {
                     width: 100,
                     child: Transform(
                       alignment: Alignment.center,
-                      transform: Matrix4.rotationY(math.pi),
-                      child: Transform.rotate(
-                        angle: (_isSamsungTablet == 1) ? -90 * (3.1415927 / 180) : 0, // Rotate feed on tablets
-                        child: CameraPreview(_controller!),
-                      )
-                    ),
+                      transform: Matrix4.identity()..scale(-1.0, 1.0, 1.0), // Flip horizontally
+                      child: CameraPreview(_controller!),
+                    )
                   ),
                 ),
               ), //CameraPreview
 
               // Finger Trace Display
+              // FingertipOverlay(key: _overlayKey, isTablet: _isSamsungTablet),
               FingertipOverlay(key: _overlayKey),
 
               // Air-Traced Text Display
@@ -344,6 +379,10 @@ class _CodePageState extends State<CodePage> {
               ),
             ]
         )
+
+
+
+
 
     );
   }
