@@ -1,0 +1,3 @@
+C:/Users/Alison/Repositories/SkyScripting/skyscript_app/android/sdk/.cxx/Debug/3u3l3o4h/x86_64/CMakeFiles/opencv_jni_shared.dir
+C:/Users/Alison/Repositories/SkyScripting/skyscript_app/android/sdk/.cxx/Debug/3u3l3o4h/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/Alison/Repositories/SkyScripting/skyscript_app/android/sdk/.cxx/Debug/3u3l3o4h/x86_64/CMakeFiles/rebuild_cache.dir

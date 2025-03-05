@@ -61,7 +61,7 @@ class _MyDrawingPageState extends State<DrawingPage> {
         },
       );
       if (result != null) {
-        int maxIndex = result["index"];
+        int maxIndex = result["index"] - 1;
         double maxValue = result["value"];
         debugPrint("Debugging max_value value: $maxValue");
         debugPrint("Debugging max_index value: $maxIndex");
