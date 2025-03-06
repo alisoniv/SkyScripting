@@ -9,9 +9,8 @@ class InferenceChannel {
     try {
       List<List<double>> pointsKotlin = points.map((p) => [p.dx, p.dy]).toList();
       final result = await _inferenceChannel.invokeMethod('inferLetter', pointsKotlin);
-      if (result is Map){
-        return result.cast<String, dynamic>();
-      }else{ return result; }
+      return result.cast<String, dynamic>();
+      
     } catch (e) {
       debugPrint("Error with inference: $e");
       return {};

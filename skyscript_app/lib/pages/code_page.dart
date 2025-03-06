@@ -7,6 +7,14 @@ import '/ffi/finger_tracker.dart';
 import 'dart:typed_data';
 import '/utils/processed_frame.dart';
 
+//Alison imports
+import 'dart:io';
+import 'package:flutter/services.dart';
+import 'package:path/path.dart';
+import 'package:path_provider/path_provider.dart';
+import 'dart:typed_data';
+import '/utils/inference_channel.dart';
+
 class CodePage extends StatefulWidget {
   @override
   _CodePageState createState() => _CodePageState();
@@ -23,11 +31,15 @@ class _CodePageState extends State<CodePage> {
   int _widthOffset = 0; //Set during build func
   int _heightOffset = 0; //Set during build func
   int frame_counter = 0;
-  String currentText = "HELLO: ";
+  String currentText = "Result: ";
   bool sim = false;
   bool debug = false; //Set to true to calibrate bounding boxes for clear and infer (displays blue dots)
 
   Uint8List? _processedFrame;
+
+  //Alison variables
+  String documentsPath = '';
+  static const MethodChannel channelName = MethodChannel('camera_frame_channel');
 
 
 
@@ -86,10 +98,10 @@ class _CodePageState extends State<CodePage> {
           inferCount += 1;
           if(debug) _overlayKey.currentState?.calibratePoint(Offset(inferXThresh, deleteYThresh));
           if (inferCount >= 20){
-            List<String> top3 = await _overlayKey.currentState?.inferLetter() ?? ["ERR", "ERR2", "ERR3"];
+            String top3 = await _overlayKey.currentState?.inferLetter() ?? "ERR";
             cooldown=true;
             inferCount=0;
-            currentText += top3[0];
+            currentText += top3;
           }
         }
         return;
@@ -112,8 +124,33 @@ class _CodePageState extends State<CodePage> {
   @override
   void initState() {
     super.initState();
+    _gettingModelFile(); // added
     _initializeCamera();
   }
+
+  //send model to kotlin side for alex's function to reference
+  Future<void> _gettingModelFile() async {
+    final Directory directory = await getApplicationDocumentsDirectory();
+
+    setState(() {
+      documentsPath = directory.path;
+    });
+    final String model_path = join(directory.path, 'ocr_letters_scripted.pt');
+    final ByteData data = await rootBundle.load('assets/ocr_letters_scripted.pt');
+    final List<int> bytes =
+        data.buffer.asUint8List(data.offsetInBytes, data.lengthInBytes);
+   
+    if (!File(model_path).existsSync()) {
+      await File(model_path).writeAsBytes(bytes);
+    }
+    channelName.invokeMethod(
+      'init_hanna_model',
+      <String, dynamic>{
+        'model_path': '$documentsPath/ocr_letters_scripted.pt',
+      },
+    );
+  }
+
 
   Future<void> _initializeCamera() async {
     _cameras = await availableCameras();

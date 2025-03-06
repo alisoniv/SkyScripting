@@ -1,6 +1,7 @@
 //package com.example.skyscriptingapp
 package com.example.skyscriptingapp
 
+//Alex's imports
 import android.graphics.Bitmap
 import android.os.Bundle
 import android.util.Log
@@ -18,13 +19,29 @@ import org.opencv.core.Size
 import org.opencv.core.Point
 import org.opencv.core.MatOfPoint
 import org.opencv.imgproc.Imgproc
-
-
 import java.io.ByteArrayOutputStream
+//end of Alex's imports
 
+
+//Alison's imports
+import org.pytorch.IValue
+import org.pytorch.Module
+import org.pytorch.Tensor
+import org.pytorch.torchvision.TensorImageUtils
+
+import android.graphics.BitmapFactory
+
+import java.io.File
+import java.io.FileInputStream
+
+import java.nio.FloatBuffer
+
+
+//end of Alison's imports
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "camera_frame_channel"
+    private var modelFilePath: String? = null //store model file path in assets here
 
     //Initialize OpenCV sdk to run on Android Native
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -44,16 +61,103 @@ class MainActivity : FlutterActivity() {
             if (call.method == "inferLetter"){
                 val points = call.arguments as List<List<Double>>
                 //CREATE IMAGE FUNCTION
-                val byteArray = generateImage(points);
+                val resultingMat = generateImage(points);
                 //INFER LETTER FUNCTION
-                result.success(mapOf("top3" to listOf("A", "B", "C"), "byteArray" to byteArray))
-            }else {
+                val map = predictImage(resultingMat)
+                result.success(map)
+
+                //result.success(mapOf("top3" to listOf("A", "B", "C"), "byteArray" to byteArray))
+
+            } else if (call.method == "init_hanna_model"){
+            
+                // path variables from flutter
+                val absPath: String? = call.argument("model_path")
+                
+                //check if they are valid path
+                if (absPath == null ) {
+                    result.error("INVALID_ARGUMENTS", "Missing required arguments", null)
+                    return@setMethodCallHandler
+                }
+                modelFilePath = absPath
+                        
+            } else {
                 result.notImplemented()
             }
         }
     }
 
-    private fun generateImage(points: List<List<Double>>): ByteArray {
+    //Alison's functions
+
+    fun predictImage(inputMat: Mat): Map<String, Any>{
+        
+        val module = Module.load(modelFilePath)
+        val inputTensor = preprocessImage(inputMat)
+
+        //debugging
+        printTensor(inputTensor)
+        val resultMapinput = findMaxValue(inputTensor)
+
+        val shape = inputTensor.shape()
+        val outputTensor: Tensor = module.forward(IValue.from(inputTensor)).toTensor()
+        val scores: FloatArray = outputTensor.dataAsFloatArray
+        //println(scores.contentToString())
+        
+
+        val resultMap = findMaxValue(outputTensor) //gives (index, max value) where we should map index to hanna's class map
+        Log.d("DebuggingRN: ", resultMap.toString()) 
+        return resultMap
+    }
+
+    fun preprocessImage(mat: Mat): Tensor {
+
+        Imgproc.cvtColor(mat, mat, Imgproc.COLOR_RGB2GRAY) // converts to grayscale here
+        mat.convertTo(mat, CvType.CV_32F, 1.0 / 255.0, 0.0)  // then scales 0-255 to 0-1
+
+        Imgproc.resize(mat, mat, Size(28.0, 28.0), 0.0, 0.0, Imgproc.INTER_AREA)
+        val floatArray = FloatArray(28 * 28)
+        mat.get(0, 0, floatArray)
+        for (i in floatArray.indices) {
+            floatArray[i] = (floatArray[i] * 2) - 1  // Scale 0-1 to -1 to 1
+        }
+        
+        //uncomment to debug
+        //Log.d("OpenCV", "Mat size: " + mat.size())
+        //Log.d("OpenCV", "Mat channels: " + mat.channels())
+        //Log.d("OpenCV", "Mat type: " + mat.type()) 
+
+        return Tensor.fromBlob(floatArray, longArrayOf(1, 1, 28, 28))  
+    }
+
+    fun findMaxValue(tensor: Tensor): Map<String, Any> {
+        val data: FloatArray = tensor.dataAsFloatArray
+        var maxValue = Float.NEGATIVE_INFINITY
+        var maxIndex = -1
+
+        for (i in data.indices) {
+            if (data[i] > maxValue) {
+                maxValue = data[i]
+                maxIndex = i
+            }
+        }
+        return hashMapOf("index" to maxIndex, "value" to maxValue)
+    }
+    
+    fun printTensor(tensor: Tensor) { //function solely for debugging purposes
+        val data = tensor.dataAsFloatArray.joinToString(", ")
+        val shape = tensor.shape()
+        val maxLogSize = 1000
+
+        for (i in data.indices step maxLogSize) {
+            val end = minOf(i + maxLogSize, data.length)
+            Log.d("YO: ", data.substring(i, end))
+        }
+        Log.d("TensorDebug", "Tensor Shape: ${shape.contentToString()}")
+        //Log.d("TensorDebug", "Tensor Data: ${data.contentToString()}")
+    }
+
+    //end of Alison's functions
+
+    private fun generateImage(points: List<List<Double>>): Mat {
         var maxX = Int.MIN_VALUE
         var maxY = Int.MIN_VALUE
         var minX = Int.MAX_VALUE
@@ -75,21 +179,25 @@ class MainActivity : FlutterActivity() {
         xOffset = -1 * minX;
         yOffset = -1 * minY;
 
-        val mat = Mat(height, width, CvType.CV_8UC1, Scalar(0.0))
+        val mat = Mat(height + 20, width + 20, CvType.CV_8UC3, Scalar(0.0, 0.0, 0.0))
         val radius = 10.0
         val gaussian_kernel = Size(radius * 3 + 1, radius * 3 + 1)
         for (point in points){
-            Imgproc.circle(mat, Point(point[0] + xOffset, point[1] + yOffset), 10, Scalar(255.0), -1)
+            Imgproc.circle(mat, Point(point[0] + xOffset, point[1] + yOffset), radius.toInt(), Scalar(255.0, 255.0, 255.0), -1)
         }
         Imgproc.GaussianBlur(mat, mat, gaussian_kernel, 0.0)
+
+        return mat
+
+        /* old stuff
         var bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
         Utils.matToBitmap(mat, bitmap)
 //        bitmap = Bitmap.createScaledBitmap(bitmap, 28, 28, true)
-
         val outputStream = ByteArrayOutputStream()
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
-
         return outputStream.toByteArray()
+        */
+
     }
 // If for some reason you want Kotlin side to process frames
     /*

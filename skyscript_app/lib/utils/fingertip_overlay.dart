@@ -53,7 +53,7 @@ class FingertipOverlayState extends State<FingertipOverlay>{
   }
 
   // Send points to Native-Kotlin side to infer letter
-  Future<List<String>> inferLetter() async{
+  Future<String> inferLetter() async{
     /*
     Input - Nothing
     Output - Top 3 Letters in confidence after inference
@@ -62,23 +62,25 @@ class FingertipOverlayState extends State<FingertipOverlay>{
     // Method Channel to communicate with Kotlin side
     InferenceChannel channel = InferenceChannel();
 
+
     if(points.isEmpty){ //Shouldn't happen, but just in case
       debugPrint("Error: no points?");
-      return ["X", "Y", "Z"];
+      return "0";
     }
 
     // Perform Inference using EMNIST-Letters Model
     final outputs = await channel.getTop3Letters(points);
-    List<String> top3 = (outputs["top3"] as List).cast<String>();
-    Uint8List letterImage = outputs["byteArray"] as Uint8List? ?? Uint8List(0);
+    int maxIndex = outputs["index"] - 1;
+    //List<String> top3 = (outputs["top3"] as List).cast<String>();
+    //Uint8List letterImage = outputs["byteArray"] as Uint8List? ?? Uint8List(0);
 
     //Send Image to debug_page.dart
-    if (context.mounted) context.read<ImageProviderNotifier>().setImage(letterImage);
+    //if (context.mounted) context.read<ImageProviderNotifier>().setImage(letterImage);
 
     //Clear Drawing Screen
     clearPoints();
 
-    return top3;
+    return String.fromCharCode(65 + maxIndex);
   }
 
   @override
