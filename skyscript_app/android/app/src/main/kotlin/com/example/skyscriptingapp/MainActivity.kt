@@ -149,7 +149,7 @@ class MainActivity : FlutterActivity() {
 
         for (i in data.indices step maxLogSize) {
             val end = minOf(i + maxLogSize, data.length)
-            Log.d("YO: ", data.substring(i, end))
+            Log.d("", data.substring(i, end))
         }
         Log.d("TensorDebug", "Tensor Shape: ${shape.contentToString()}")
         //Log.d("TensorDebug", "Tensor Data: ${data.contentToString()}")
@@ -158,6 +158,7 @@ class MainActivity : FlutterActivity() {
     //end of Alison's functions
 
     private fun generateImage(points: List<List<Double>>): Mat {
+        val padding = 150;
         var maxX = Int.MIN_VALUE
         var maxY = Int.MIN_VALUE
         var minX = Int.MAX_VALUE
@@ -171,6 +172,11 @@ class MainActivity : FlutterActivity() {
             minX = minOf(minX, x)
             minY = minOf(minY, y)
         }
+        minX -= padding;
+        minY -= padding;
+        maxX += padding;
+        maxY += padding;
+
         val width = maxOf(1, maxX - minX)
         val height = maxOf(1, maxY - minY)
         Log.d("MyTag", "Width: $width , Height: $height")
@@ -179,8 +185,8 @@ class MainActivity : FlutterActivity() {
         xOffset = -1 * minX;
         yOffset = -1 * minY;
 
-        val mat = Mat(height + 20, width + 20, CvType.CV_8UC3, Scalar(0.0, 0.0, 0.0))
-        val radius = 10.0
+        val mat = Mat(height, width, CvType.CV_8UC3, Scalar(0.0, 0.0, 0.0))
+        val radius = 20.0
         val gaussian_kernel = Size(radius * 3 + 1, radius * 3 + 1)
         for (point in points){
             Imgproc.circle(mat, Point(point[0] + xOffset, point[1] + yOffset), radius.toInt(), Scalar(255.0, 255.0, 255.0), -1)
