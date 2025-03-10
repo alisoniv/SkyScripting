@@ -114,7 +114,8 @@ extern "C"
 
         // Define Orange Color Range to Isolate
 //        cv::Scalar lowerOrange(0, 130, 210);
-        cv::Scalar lowerOrange(0, 130, 150);
+//        cv::Scalar lowerOrange(0, 130, 175); // use if outside
+        cv::Scalar lowerOrange(0, 130, 125);
         cv::Scalar upperOrange(25, 240, 255);
 //
 
